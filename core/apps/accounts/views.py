@@ -1,8 +1,13 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-from apps.accounts.serializers import CreateUserSerializer
+from apps.accounts.serializers import CreateUserSerializer, MyTokenObtainPairSerializer
+
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
 
 
 class RegisterAPIView(APIView):
@@ -13,6 +18,12 @@ class RegisterAPIView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
+
+            if user.is_staff:
+                refresh.payload.update({'group': 'admin'})
+            else:
+                refresh.payload.update({'group': 'user', 'role': user.account_type})
+
             data = {
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
