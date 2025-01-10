@@ -65,7 +65,7 @@ class ProductsBySellerView(APIView):
         request=CreateProductSerializer,
         responses=CreateProductSerializer,
     )  # сериализаторы для запроса и ответа, это сделано для того,
-       # чтобы корректно предустанавливать текст запроса и ответа в Swagger.
+    # чтобы корректно предустанавливать текст запроса и ответа в Swagger.
     def post(self, request, *args, **kwargs):
         serializer = CreateProductSerializer(data=request.data)
         seller = Seller.objects.get_or_none(user=request.user, is_approved=True)
@@ -91,6 +91,8 @@ class ProductsBySellerView(APIView):
 class SellerProductView(APIView):
     serializer_class = CreateProductSerializer
 
+    #  Вспомогательный метод, который получает продукт из базы данных по его slug.
+    #  Он использует get_or_none, что предотвращает ошибки, если товар не найден.
     def get_object(self, slug):
         product = Product.objects.get_or_none(slug=slug)
         return product
@@ -103,7 +105,7 @@ class SellerProductView(APIView):
         tags=tags
     )
     def put(self, request, *args, **kwargs):
-        product = self.get_object(kwargs['slug'])
+        product = self.get_object(kwargs['slug'])  # Получаем продукт по slug из URL.
         if not product:
             return Response(data={'message': 'Product does not exist!'}, status=404)
         #  Это критически важная проверка. Она гарантирует, что только продавец может его изменить.
@@ -117,15 +119,16 @@ class SellerProductView(APIView):
             if not category:
                 return Response(data={'message': 'Category does not exist!'}, status=404)
             data['category'] = category
+            #  Eсли текущая цена изменилась, старая цена сохраняется в поле price_old.
             if data['price_current'] != product.price_current:
                 data['price_old'] = product.price_current
+            # Это вызов функции set_dict_attr. Она обновляет атрибуты объекта product с помощью данных из сериализатора.
             product = set_dict_attr(product, data)
             product.save()
             serializer = ProductSerializer(product)
             return Response(data=serializer.data, status=200)
         else:
             return Response(data=serializer.errors, status=400)
-
 
     def delete(self, request, *args, **kwargs):
         product = self.get_object(kwargs['slug'])
