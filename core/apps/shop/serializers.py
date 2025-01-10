@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.sellers.serializers import SellerSerializer
+
 
 class CategorySerializer(serializers.Serializer):
     name = serializers.CharField()
@@ -45,3 +47,27 @@ class CreateProductSerializer(serializers.Serializer):
     image1 = serializers.ImageField()
     image2 = serializers.ImageField(required=False)
     image3 = serializers.ImageField(required=False)
+
+
+#  Этот сериализатор используется для представления информации о продукте внутри элемента заказа
+#  (то есть, товара в корзине). Он не сериализует всю модель Product, а только необходимые поля.
+class OrderItemProductSerializer(serializers.Serializer):
+    seller = SellerSerializer()
+    name = serializers.CharField()
+    slug = serializers.SlugField()
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, source='price_current')
+
+
+#  Этот сериализатор используется для представления всего элемента заказа (то есть, записи в корзине).
+class OrderItemSerializer(serializers.Serializer):
+    product = OrderItemProductSerializer()
+    quantity = serializers.IntegerField()
+    total = serializers.FloatField(source='get_total')
+
+
+#  Этот сериализатор используется для валидации данных, отправленных клиентом при добавлении,
+#  обновлении или удалении товара из корзины. Он не сериализует данные модели OrderItem целиком,
+#  а только те поля, которые необходимы для этой операции. Получая идентификатор продукта (slug) и количество товара.
+class ToggleCartItemSerializer(serializers.Serializer):
+    slug = serializers.SlugField()
+    quantity = serializers.IntegerField(min_value=0)
