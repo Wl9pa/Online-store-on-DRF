@@ -5,7 +5,8 @@ from rest_framework.views import APIView
 from apps.profiles.models import OrderItem, ShippingAddress, Order
 from apps.sellers.models import Seller
 from apps.shop.models import Category, Product
-from apps.shop.serializers import CategorySerializer, ProductSerializer, OrderItemSerializer, ToggleCartItemSerializer
+from apps.shop.serializers import CategorySerializer, ProductSerializer, OrderItemSerializer, ToggleCartItemSerializer, \
+    CheckoutSerializer, OrderSerializer
 
 tags = ["Shop"]
 
@@ -203,3 +204,67 @@ class CartView(APIView):
             data = serializer.data
         #  Возвращает ответ с сообщением и данными о товаре (если товар не был удален).
         return Response(data={'message': f"Item {resp_message_substring} Cart", 'item': data}, status=status_code)
+
+
+#  Этот код описывает эндпоинт для оформления заказа. Он валидирует данные, получает товары из корзины
+#  создает заказ и связывает его с товарами, а затем возвращает данные о созданном заказе.
+class CheckoutView(APIView):
+    serializer_class = CheckoutSerializer
+
+    @extend_schema(
+        summary='Checkout',
+        description="""
+            Эта конечная точка позволяет пользователю создать заказ, через который затем можно произвести оплату.
+        """,
+        tags=tags,
+        request=CheckoutSerializer,
+    )
+    def post(self, request, *args, **kwargs):
+        #  Получаем текущего пользователя.
+        user = request.user
+        #  Получаем элементы из корзины текущего пользователя (выборка order=None).
+        orderitems = OrderItem.objects.filter(user=user, order=None)
+        #  Проверяем на наличие товаров в корзине. Если товаров нет, возвращается ошибка 404.
+        if not orderitems.exists():
+            return Response({'message': 'No Items in Cart'}, status=404)
+        #  Создаем экземпляр CheckoutSerializer для валидации данных из запроса.
+        serializer = self.serializer_class(data=request.data)
+        #  Валидация данных. Исключение возбуждается при ошибке.
+        serializer.is_valid(raise_exception=True)
+        #  Записываем валидированные данные в переменную data.
+        data = serializer.validated_data
+        #  Получение идентификатора доставки из данных.
+        shipping_id = data.get('shipping_id')
+        #  Если shipping_id указан
+        if shipping_id:
+            # Получаем информацию о доставке на основе идентификатора доставки, введенного пользователем.
+            shipping = ShippingAddress.objects.get_or_none(id=shipping_id)  # Получем адрес доставки из БД
+            #  Обрабатываем случай, когда адрес доставки не найден, выводя ошибку.
+            if not shipping:
+                return Response({'message': 'No shipping address with that ID'}, status=404)
+
+        #  Вспомогательная функция, которая извлекает только нужные нам данные из объекта shipping и возвращает словарь.
+        def append_shipping_details(shipping):
+            fields_to_update = [
+                'full_name',
+                'email',
+                'phone',
+                'address',
+                'city',
+                'country',
+                'zipcode',
+            ]
+            data = {}
+            for field in fields_to_update:
+                value = getattr(shipping, field)
+                data[field] = value
+            return data
+
+        #  Создаем заказ с данными пользователя и адреса доставки.
+        order = Order.objects.create(user=user, **append_shipping_details(shipping))
+        #  Обновление элементов корзины, устанавливая для них связь с созданным заказом.
+        orderitems.update(order=order)
+        #  Сериализация созданного заказа с помощью OrderSerializer
+        serializer = OrderSerializer(order)
+        #  Возврат ответа с сообщением и данными о заказе.
+        return Response(data={'message': 'Checkout Successful', 'item': serializer.data}, status=200)

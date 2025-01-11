@@ -1,5 +1,7 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.profiles.serializers import ShippingAddressSerializer
 from apps.sellers.serializers import SellerSerializer
 
 
@@ -71,3 +73,44 @@ class OrderItemSerializer(serializers.Serializer):
 class ToggleCartItemSerializer(serializers.Serializer):
     slug = serializers.SlugField()
     quantity = serializers.IntegerField(min_value=0)
+
+
+#   Сериализатор для валидации данных, связанных с этапом оформления заказа до создания самого заказа.
+class CheckoutSerializer(serializers.Serializer):
+    #  Это поле представляет собой идентификатор (UUID) информации о доставке, которое пользователь уже сохранил ранее.
+    shipping_id = serializers.UUIDField()
+
+
+#  Сериализатор предназначен для представления данных о заказе после его создания.
+#  Он включает в себя информацию о пользователе, статусе доставки и оплаты, стоимости и других деталях.
+class OrderSerializer(serializers.Serializer):
+    #  Уникальный идентификатор транзакции (можем использовать для формирования запроса оплаты).
+    tx_ref = serializers.CharField()
+    #  Имя пользователя.
+    first_name = serializers.CharField(source='user.first_name')
+    #  Фамилия пользователя.
+    last_name = serializers.CharField(source='user.last_name')
+    #  Email пользователя.
+    email = serializers.EmailField(source='user.email')
+    #  Статус доставки заказа.
+    delivery_status = serializers.CharField()
+    #  Статус оплаты заказа.
+    payment_status = serializers.CharField()
+    #  Дата и время доставки заказа.
+    date_delivered = serializers.DateTimeField()
+    #  Детали доставки. SerializerMethodField указывает
+    #  что данные для этого поля будут получены из метода get_shipping_details.
+    shipping_details = serializers.SerializerMethodField()
+    #  Итоговая стоимость товаров в заказе (например без учета доставки).
+    #  source="get_cart_subtotal" указывает на метод модели Order, который вычисляет эту сумму
+    subtotal = serializers.DecimalField(max_digits=100, decimal_places=2, source='get_cart_subtotal')
+    #  Общая стоимость заказа (с учетом доставки). source="get_cart_total" аналогично subtotal
+    total = serializers.DecimalField(max_digits=100, decimal_places=2, source='get_cart_total')
+
+    #  Этот метод используется для получения данных о доставке. Он использует ShippingAddressSerializer
+    #  для сериализации данных об адресе доставки и возвращает сериализованные данные.
+    #  Здесь  @extend_schema_field(ShippingAddressSerializer) указывает
+    #  что возвращаемый тип данных соответствует сериализатору ShippingAddressSerializer.
+    @extend_schema_field(ShippingAddressSerializer)
+    def get_shipping_details(self, obj):
+        return ShippingAddressSerializer(obj).data
