@@ -3,9 +3,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.utils import set_dict_attr
-from apps.profiles.models import ShippingAddress
+from apps.profiles.models import ShippingAddress, Order, OrderItem
 
 from apps.profiles.serializers import ProfileSerializer, ShippingAddressSerializer
+from apps.shop.serializers import OrderSerializer, CheckItemOrderSerializer
 
 tags = ['Profiles']
 
@@ -150,3 +151,59 @@ class ShippingAddressViewID(APIView):
             return Response(data={'message': 'Адреса доставки не существует!'}, status=404)
         shipping_address.delete()
         return Response(data={'message': 'Адрес доставки успешно удален'}, status=200)
+
+
+#  Это представление возвращает список всех заказов, принадлежащих конкретному пользователю.
+class OrdersView(APIView):
+    serializer_class = OrderSerializer
+
+    @extend_schema(
+        operation_id='orders_view',
+        summary='Orders Fetch',
+        description="""
+            Эта конечная точка возвращает все заказы для конкретного пользователя.
+        """,
+        tags=tags
+    )
+    def get(self, request, *args, **kwargs):
+        #  Получает объект текущего авторизованного пользователя.
+        user = request.user
+        #  Выполняет запрос к базе данных для получения заказов текущего пользователя.
+        #  .select_related("user"): Загружает связанную модель пользователя (user) для каждого заказа
+        #  чтобы избежать дополнительных запросов к базе данных.
+        #  .prefetch_related("orderitems", "orderitems__product"): Предварительно загружает связанные элементы заказа
+        #  (orderitems) и продукты внутри этих элементов (orderitems__product).
+        #  .order_by("-created_at"): Сортирует заказы по полю created_at в обратном порядке (от самых новых к старым).
+        orders = (Order.objects.filter(user=user).select_related('user')
+                  .prefetch_related('orderitems', 'orderitems__product')
+                  .order_by('-created_at'))
+        #  Создается сериализатор для сериализации списка заказов.
+        serializer = self.serializer_class(orders, many=True)
+        #  Возвращает HTTP-ответ с кодом 200 (OK) и сериализованными данными заказов.
+        return Response(data=serializer.data, status=200)
+
+
+#  Это представление возвращает список элементов конкретного заказа (товаров внутри заказа).
+class OrderItemView(APIView):
+    serializer_class = CheckItemOrderSerializer
+
+    @extend_schema(
+        operation_id='orders_items_view',
+        summary='Item Orders Fetch',
+        description="""
+            Эта конечная точка возвращает все заказы на товары для конкретного пользователя.
+        """,
+        tags=tags
+    )
+    def get(self, request, *args, **kwargs):
+        #  Получаем заказ по tx_ref (идентификатор транзакции), передаваемому в параметрах URL.
+        #  get_or_none возвращает None, если заказ не найден.
+        order = Order.objects.get_or_none(tx_ref=kwargs['tx_ref'])
+        if not order or order.user != request.user:
+            return Response(data={'message': 'Order does not exist!'}, status=404)
+        #  Получаем товары заказа, принадлежащих к найденному заказу.
+        order_items = OrderItem.objects.filter(order=order)
+        #  Сериализация элементов заказа.
+        serializer = self.serializer_class(order_items, many=True)
+        #  Возврат ответа.
+        return Response(data=serializer.data, status=200)

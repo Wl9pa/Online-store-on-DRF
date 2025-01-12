@@ -3,10 +3,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.utils import set_dict_attr
+from apps.profiles.models import Order, OrderItem
 from apps.sellers.models import Seller
 from apps.sellers.serializers import SellerSerializer
 from apps.shop.models import Product, Category
-from apps.shop.serializers import ProductSerializer, CreateProductSerializer
+from apps.shop.serializers import ProductSerializer, CreateProductSerializer, OrderSerializer, CheckItemOrderSerializer
 
 tags = ['Sellers']
 
@@ -23,13 +24,23 @@ class SellersView(APIView):
         tags=tags
     )
     def post(self, request):
+        #  Получает объект текущего авторизованного пользователя из запроса
         user = request.user
+        #  Создает экземпляр сериализатора SellerSerializer, используя данные из тела запроса (request.data).
+        #  partial=False означает, что все поля в сериализаторе обязательны для заполнения.
         serializer = self.serializer_class(data=request.data, partial=False)
         if serializer.is_valid():
+            #  Извлекает валидированные данные из сериализатора.
+            #  Это словарь, содержащий данные, готовые для сохранения в базе данных.
             data = serializer.validated_data
+            #  update_or_create — метод менеджера моделей Django.
+            #  Он пытается найти запись в таблице Seller, где user совпадает с текущим пользователем.
+            #  Если такая запись найдена, она обновляется с использованием значений из defaults(то есть, data).
             seller, _ = Seller.objects.update_or_create(user=user, defaults=data)
+            #  Мы меняем тип аккаунта пользователя, с покупателя на продавца.
             user.account_type = 'SELLER'
             user.save()
+            #  Создает новый экземпляр сериализатора, используя полученный или созданный объект seller.
             serializer = self.serializer_class(seller)
             return Response(data=serializer.data, status=201)
             #  Этот подход обеспечивает идемпотентность — повторные вызовы с теми же данными не создадут дубликаты.
@@ -138,3 +149,57 @@ class SellerProductView(APIView):
             return Response(data={'message': 'Access is denied'}, status=403)
         product.delete()
         return Response(data={'message': 'Product deleted successfully'}, status=200)
+
+
+#  будет показывать список всех заказов, где продавец участвовал в качестве продавца хотя бы одного товара в заказе.
+class SellerOrdersView(APIView):
+    serializer_class = OrderSerializer
+
+    @extend_schema(
+        operation_id='seller_orders',
+        summary='Seller Orders Fetch',
+        description="""
+            Эта конечная точка возвращает все заказы для определенного продавца.
+        """,
+        tags=tags
+    )
+    def get(self, request):
+        #  Получает объект продавца из текущего авторизованного пользователя.
+        #  Предполагается, что модель пользователя имеет отношение seller.
+        seller = request.user.seller
+        #  Выполняет запрос к базе данных для получения всех заказов, где хотя бы один элемент заказа (orderitems)
+        #  содержит продукт (product), принадлежащий текущему продавцу (seller).
+        #  Заказы сортируются по дате создания в обратном порядке (-created_at).
+        orders = (Order.objects.filter(orderitems__product__seller=seller).order_by('-created_at'))
+        #  Создается сериализатор для сериализации списка заказов.
+        serializer = self.serializer_class(orders, many=True)
+        #  Возвращает HTTP-ответ с кодом 200 (OK) и сериализованными данными заказов.
+        return Response(data=serializer.data, status=200)
+
+
+#  возвращает список элементов заказов (товаров) для конкретного заказа, принадлежащего данному продавцу
+class SellerOrderItemView(APIView):
+    serializer_class = CheckItemOrderSerializer
+
+    @extend_schema(
+        operation_id='seller_orders_items_view',
+        summary='Seller Item Orders Fetch',
+        description="""
+            Эта конечная точка возвращает все заказы на товары для определенного продавца.
+        """,
+        tags=tags
+    )
+    def get(self, request, **kwargs):
+        #  Получение объекта продавца.
+        seller = request.user.seller
+        #  Получение заказа по tx_ref (идентификатор транзакции), передаваемому в параметрах URL.
+        #  get_or_none возвращает None, если заказ не найден.
+        order = Order.objects.get_or_none(tx_ref=kwargs['tx_ref'])
+        if not order:
+            return Response(data={'message': 'Order does not exist!'}, status=404)
+        #  Получение элементов заказа, учитывая, что они принадлежат найденному заказу и продавцу.
+        order_items = OrderItem.objects.filter(order=order, product__seller=seller)
+        #  Сериализация элементов заказа.
+        serializer = self.serializer_class(order_items, many=True)
+        #  Возврат ответа
+        return Response(data=serializer.data, status=200)

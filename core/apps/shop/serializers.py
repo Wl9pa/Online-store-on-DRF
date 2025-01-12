@@ -114,3 +114,27 @@ class OrderSerializer(serializers.Serializer):
     @extend_schema_field(ShippingAddressSerializer)
     def get_shipping_details(self, obj):
         return ShippingAddressSerializer(obj).data
+
+
+class ItemProductSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    slug = serializers.SlugField()
+    desc = serializers.CharField()
+    price_old = serializers.DecimalField(max_digits=10, decimal_places=2)
+    price_current = serializers.DecimalField(max_digits=10, decimal_places=2)
+    category = CategorySerializer()
+    image1 = serializers.ImageField()
+    image2 = serializers.ImageField(required=False)
+    image3 = serializers.ImageField(required=False)
+
+
+#  Это сериализатор для представления позиции в заказе.
+#  В сущности, CheckItemOrderSerializer использует ItemProductSerializer для вложенного представления
+#  товара в позиции заказа. total вычисляется динамически (умножением quantity на price_current).
+class CheckItemOrderSerializer(serializers.Serializer):
+    #  вложенный сериализатор ItemProductSerializer для представления товара
+    product = ItemProductSerializer()
+    #  целое число, количество товара
+    quantity = serializers.IntegerField()
+    #  число с плавающей точкой, общая стоимость позиции; вычисляется методом  get_total модели OrderItem
+    total = serializers.FloatField(source='get_total')
