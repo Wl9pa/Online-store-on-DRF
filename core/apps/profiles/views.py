@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.permissions import IsOwner
 from apps.common.utils import set_dict_attr
 from apps.profiles.models import ShippingAddress, Order, OrderItem
 
@@ -12,6 +13,7 @@ tags = ['Profiles']
 
 
 class ProfileView(APIView):
+    permission_classes = [IsOwner]
     serializer_class = ProfileSerializer
 
     @extend_schema(
@@ -58,6 +60,7 @@ class ProfileView(APIView):
 
 
 class ShippingAddressView(APIView):
+    permission_classes = [IsOwner]
     serializer_class = ShippingAddressSerializer
 
     @extend_schema(
@@ -94,12 +97,19 @@ class ShippingAddressView(APIView):
 
 
 class ShippingAddressViewID(APIView):
+    permission_classes = [IsOwner]
     serializer_class = ShippingAddressSerializer
 
     #  Это вспомогательный метод, который получает адрес доставки из базы данных по ID.
     #  Он использует метод get_or_none для возврата объекта или None, если id не найден.
     def get_object(self, user, shipping_id):
         shipping_address = ShippingAddress.objects.get_or_none(id=shipping_id)
+        if shipping_address is not None:
+            #  check_object_permissions использует permission_classes, указанные в представлении, чтобы определить,
+            #  имеет ли текущий пользователь разрешение на доступ к данному объекту
+            #  ShippingAddress(проверяем его ли это адрес доставки). Если разрешение отсутствует, будет возбуждено
+            #  исключение PermissionDenied, которое прервет выполнение и вернет клиенту ошибку 403 (Forbidden).
+            self.check_object_permissions(self.request, shipping_address)
         return shipping_address
 
     @extend_schema(
@@ -155,6 +165,7 @@ class ShippingAddressViewID(APIView):
 
 #  Это представление возвращает список всех заказов, принадлежащих конкретному пользователю.
 class OrdersView(APIView):
+    permission_classes = [IsOwner]
     serializer_class = OrderSerializer
 
     @extend_schema(
@@ -185,6 +196,7 @@ class OrdersView(APIView):
 
 #  Это представление возвращает список элементов конкретного заказа (товаров внутри заказа).
 class OrderItemView(APIView):
+    permission_classes = [IsOwner]
     serializer_class = CheckItemOrderSerializer
 
     @extend_schema(

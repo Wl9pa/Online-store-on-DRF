@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.permissions import IsOwner
 from apps.profiles.models import OrderItem, ShippingAddress, Order
 from apps.sellers.models import Seller
 from apps.shop.models import Category, Product
@@ -43,7 +44,7 @@ class CategoriesView(APIView):
             return Response(serializer.errors, status=400)
 
 
-#  Этот код реализует простой эндпоинт для получения списка продуктов по slug категории.
+#  Этот код реализует эндпоинт для получения списка продуктов по slug категории.
 #  Он включает в себя обработку ошибок (если категория не найдена) и оптимизированный запрос к базе данных.
 class ProductsByCategoryView(APIView):
     serializer_class = ProductSerializer
@@ -129,12 +130,14 @@ class ProductView(APIView):
 
 
 class CartView(APIView):
+    permission_classes = [IsOwner]
     serializer_class = OrderItemSerializer
 
     @extend_schema(
         summary='Cart Items Fetch',
         description="""
             Эта конечная точка возвращает все товары в пользовательской корзине.
+            Требуется аутентификация.
         """,
         tags=tags
     )
@@ -154,8 +157,9 @@ class CartView(APIView):
     @extend_schema(
         summary='Toggle Item in cart',
         description="""
-            Эта конечная точка позволяет пользователю или гостю добавить/обновить/удалить товар в корзине.
+            Эта конечная точка позволяет пользователю добавить/обновить/удалить товар в корзине.
             Если количество равно 0, товар удаляется из корзины
+            Требуется аутентификация.
         """,
         tags=tags,
         request=ToggleCartItemSerializer
@@ -209,12 +213,14 @@ class CartView(APIView):
 #  Этот код описывает эндпоинт для оформления заказа. Он валидирует данные, получает товары из корзины
 #  создает заказ и связывает его с товарами, а затем возвращает данные о созданном заказе.
 class CheckoutView(APIView):
+    permission_classes = [IsOwner]
     serializer_class = CheckoutSerializer
 
     @extend_schema(
         summary='Checkout',
         description="""
             Эта конечная точка позволяет пользователю создать заказ, через который затем можно произвести оплату.
+            Требуется аутентификация.
         """,
         tags=tags,
         request=CheckoutSerializer,

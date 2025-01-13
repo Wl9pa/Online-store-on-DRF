@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.permissions import IsSeller
 from apps.common.utils import set_dict_attr
 from apps.profiles.models import Order, OrderItem
 from apps.sellers.models import Seller
@@ -49,6 +50,7 @@ class SellersView(APIView):
 
 
 class ProductsBySellerView(APIView):
+    permission_classes = [IsSeller]
     serializer_class = ProductSerializer
 
     @extend_schema(
@@ -100,6 +102,7 @@ class ProductsBySellerView(APIView):
 
 
 class SellerProductView(APIView):
+    permission_classes = [IsSeller]
     serializer_class = CreateProductSerializer
 
     #  Вспомогательный метод, который получает продукт из базы данных по его slug.
@@ -153,6 +156,7 @@ class SellerProductView(APIView):
 
 #  будет показывать список всех заказов, где продавец участвовал в качестве продавца хотя бы одного товара в заказе.
 class SellerOrdersView(APIView):
+    permission_classes = [IsSeller]
     serializer_class = OrderSerializer
 
     @extend_schema(
@@ -179,6 +183,7 @@ class SellerOrdersView(APIView):
 
 #  возвращает список элементов заказов (товаров) для конкретного заказа, принадлежащего данному продавцу
 class SellerOrderItemView(APIView):
+    permission_classes = [IsSeller]
     serializer_class = CheckItemOrderSerializer
 
     @extend_schema(
