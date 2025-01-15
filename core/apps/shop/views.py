@@ -1,11 +1,13 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.permissions import IsOwner
 from apps.profiles.models import OrderItem, ShippingAddress, Order
 from apps.sellers.models import Seller
+from apps.shop.filters import ProductFilter
 from apps.shop.models import Category, Product
+from apps.shop.schema_examples import PRODUCT_PARAM_EXAMPLE
 from apps.shop.serializers import CategorySerializer, ProductSerializer, OrderItemSerializer, ToggleCartItemSerializer, \
     CheckoutSerializer, OrderSerializer
 
@@ -77,12 +79,25 @@ class ProductsView(APIView):
         description="""
             Эта конечная точка возвращает все продукты.
         """,
-        tags=tags
+        tags=tags,
+        parameters=PRODUCT_PARAM_EXAMPLE,
     )
     def get(self, request, *args, **kwargs):
+        #  Мы получаем все товары в виде QuerySet в переменную products
         products = Product.objects.select_related('category', 'seller', 'seller__user').all()
-        serializer = self.serializer_class(products, many=True)
-        return Response(data=serializer.data, status=200)
+        #  Инициализируем ProductFilter, применяя параметры запроса (request.GET) к queryset
+        filterset = ProductFilter(request.GET, queryset=products)
+        #  Проверяем, валидны ли переданные параметры фильтрации
+        if filterset.is_valid():
+            #  Если параметры валидны, применяем фильтры к queryset
+            queryset = filterset.qs
+            #  Сериализуем отфильтрованный queryset в JSON с помощью ProductSerializer
+            serializer = self.serializer_class(queryset, many=True)
+            #  Возвращаем сериализованные данные в ответе API
+            return Response(serializer.data)
+        else:
+            #  Если параметры невалидны, возвращаем код ошибки 400 (Bad Request) и информацию об ошибках
+            return Response(data=filterset.errors, status=400)
 
 
 #  Представление, выводящие все товары одного продавца, получая его slug
