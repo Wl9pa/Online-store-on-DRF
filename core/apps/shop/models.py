@@ -52,7 +52,8 @@ class Product(IsDeletedModel):
     slug = AutoSlugField(populate_from='name', unique=True, db_index=True)
     desc = models.TextField()
     price_old = models.DecimalField(max_digits=10, decimal_places=2, null=True)
-    price_current = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
+    price_current = models.DecimalField(max_digits=10, decimal_places=2)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products', null=True)
     in_stock = models.IntegerField(default=5)
 
     #  Разрешено только 3 изображения

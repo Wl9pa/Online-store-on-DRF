@@ -1,7 +1,9 @@
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.paginations import CustomPagination
 from apps.common.permissions import IsOwner
 from apps.profiles.models import OrderItem, ShippingAddress, Order
 from apps.sellers.models import Seller
@@ -72,6 +74,8 @@ class ProductsByCategoryView(APIView):
 #  Представление, выводящие все товары интернет магазина
 class ProductsView(APIView):
     serializer_class = ProductSerializer
+    #  кастомный класс пагинации для обработки запросов, который разбивает результаты на страницы по номерам
+    pagination_class = CustomPagination
 
     @extend_schema(
         operation_id='all_products',
@@ -91,6 +95,11 @@ class ProductsView(APIView):
         if filterset.is_valid():
             #  Если параметры валидны, применяем фильтры к queryset
             queryset = filterset.qs
+            #  Создаем экземпляр класса пагинации PageNumberPagination
+            paginator = self.pagination_class()
+            #  Разбиваем отфильтрованный queryset на страницы согласно настройкам пагинации и параметрам запроса
+            #  (например, номер страницы и размер страницы)
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
             #  Сериализуем отфильтрованный queryset в JSON с помощью ProductSerializer
             serializer = self.serializer_class(queryset, many=True)
             #  Возвращаем сериализованные данные в ответе API
