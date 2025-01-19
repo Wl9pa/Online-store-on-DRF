@@ -144,6 +144,13 @@ class SellerProductView(APIView):
         else:
             return Response(data=serializer.errors, status=400)
 
+    @extend_schema(
+        summary="Seller Product Delete",
+        description="""
+                Эта конечная точка позволяет продавцу удалить продукт.
+            """,
+        tags=tags
+    )
     def delete(self, request, *args, **kwargs):
         product = self.get_object(kwargs['slug'])
         if not product:

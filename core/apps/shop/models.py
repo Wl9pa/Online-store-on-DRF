@@ -1,6 +1,7 @@
 from autoslug import AutoSlugField
 from django.db import models
 
+from apps.accounts.models import User
 from apps.common.models import BaseModel, IsDeletedModel
 from apps.sellers.models import Seller
 
@@ -64,3 +65,14 @@ class Product(IsDeletedModel):
     def __str__(self):
         return str(self.name)
 
+
+class Review(IsDeletedModel):
+    RATING_CHOICES = ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5))
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
+    rating = models.IntegerField(choices=RATING_CHOICES)
+    text = models.TextField()
+
+    def __str__(self):
+        return f"{self.user.full_name}'s review for {self.product.name} ({self.rating}/5)"

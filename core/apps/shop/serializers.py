@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.profiles.serializers import ShippingAddressSerializer
 from apps.sellers.serializers import SellerSerializer
+from apps.shop.models import Review
 
 
 class CategorySerializer(serializers.Serializer):
@@ -138,3 +139,25 @@ class CheckItemOrderSerializer(serializers.Serializer):
     quantity = serializers.IntegerField()
     #  число с плавающей точкой, общая стоимость позиции; вычисляется методом  get_total модели OrderItem
     total = serializers.FloatField(source='get_total')
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ['id', 'rating', 'text']
+        read_only_fields = ['id']
+
+    def validate(self, data):
+        user = self.context['request'].user
+        product_slug = self.context['view'].kwargs.get('product_slug')
+
+        existing_review = Review.objects.filter(
+            user=user,
+            product__slug=product_slug,
+            is_deleted=False
+        ).first()
+
+        if existing_review:
+            raise serializers.ValidationError('Вы уже оставили отзыв на этот продукт')
+
+        return data
